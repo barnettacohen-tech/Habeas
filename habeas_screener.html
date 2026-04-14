@@ -833,6 +833,7 @@ async function setupAirtableTable() {
     const existing = table.fields.map(f => f.name);
     const needed = [
       { name: 'Date',            type: 'singleLineText' },
+      { name: 'Name',            type: 'singleLineText' },
       { name: 'A-Number',        type: 'singleLineText' },
       { name: 'Facility',        type: 'singleLineText' },
       { name: 'US Entry Date',   type: 'singleLineText' },
@@ -841,6 +842,7 @@ async function setupAirtableTable() {
       { name: 'Grounds',         type: 'multilineText'  },
       { name: 'Lawyer',          type: 'singleLineText' },
       { name: 'Habeas Filed',    type: 'singleLineText' },
+      { name: 'Notes',           type: 'multilineText'  },
     ];
     let added = 0;
     for (const field of needed) {
