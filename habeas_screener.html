@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Habeas Eligibility Screener</title>
+  <style>
+    :root {
+      --slate:    #2C3E50;
+      --steel:    #4A90A4;
+      --green:    #1E8449;
+      --green-bg: #EAFAF1;
+      --amber:    #D68910;
+      --amber-bg: #FEF5E7;
+      --yellow:   #FFFDE7;
+      --gray:     #F4F5F7;
+      --es-bg:    #EAF4F8;
+      --border:   #CED4DA;
+      --red:      #922B21;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Calibri, 'Segoe UI', sans-serif; background: #EAECEF; color: var(--slate); }
+
+    /* ── Sticky result banner ── */
+    #result-wrap {
+      position: sticky; top: 0; z-index: 200;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    #result-banner {
+      padding: 18px 24px;
+      font-size: 17px; font-weight: bold; color: white;
+      text-align: center;
+      background: #808B96;
+      transition: background .3s;
+      min-height: 58px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #result-banner.eligible   { background: var(--green); }
+    #result-banner.not-yet    { background: var(--amber); }
+    #grounds-bar {
+      background: var(--gray); border-bottom: 2px solid var(--border);
+      padding: 7px 20px; font-size: 12px; color: #555; min-height: 32px;
+      line-height: 1.6;
+    }
+
+    /* ── Page chrome ── */
+    .page-title {
+      background: var(--slate); color: white;
+      text-align: center; padding: 14px 20px;
+      font-size: 18px; font-weight: bold; letter-spacing: .5px;
+    }
+    .container { max-width: 860px; margin: 0 auto; padding: 12px 14px 50px; }
+
+    /* ── Form sections ── */
+    .section {
+      background: white; border: 1px solid var(--border);
+      border-radius: 8px; margin: 14px 0; overflow: hidden;
+    }
+    .section-hdr {
+      background: var(--slate); color: white;
+      padding: 9px 16px; font-size: 12px; font-weight: bold;
+      letter-spacing: .6px; text-transform: uppercase;
+    }
+    .section-note {
+      background: var(--es-bg); padding: 8px 16px;
+      font-size: 12px; color: #335; font-style: italic;
+      border-bottom: 1px solid var(--border);
+    }
+    .q-row {
+      display: grid; grid-template-columns: 1fr 260px;
+      border-bottom: 1px solid var(--border);
+    }
+    .q-row:last-child { border-bottom: none; }
+    .q-label {
+      padding: 11px 16px; background: var(--gray);
+      border-right: 1px solid var(--border);
+    }
+    .q-en  { font-size: 13px; font-weight: bold; color: var(--slate); line-height: 1.4; }
+    .q-es  { font-size: 12px; color: #666; font-style: italic; margin-top: 3px; line-height: 1.3; }
+    .q-input {
+      padding: 10px 14px; background: var(--yellow);
+      display: flex; align-items: center; flex-direction: column; justify-content: center; gap: 5px;
+    }
+    .q-input select, .q-input input[type="date"], .q-input input[type="text"] {
+      width: 100%; padding: 7px 10px;
+      font-size: 13px; font-family: inherit;
+      border: 1px solid var(--border); border-radius: 5px;
+      background: white; color: var(--slate); font-weight: bold;
+      cursor: pointer;
+    }
+    .q-input select:focus, .q-input input:focus {
+      outline: 2px solid var(--steel); border-color: var(--steel);
+    }
+    .auto-val {
+      font-size: 12px; font-weight: bold; color: var(--steel);
+      text-align: center; width: 100%;
+    }
+    .auto-val.warn { color: var(--amber); }
+
+    /* ── Guidance / hint lines ── */
+    .guidance {
+      grid-column: 1 / -1;
+      padding: 6px 16px 8px; font-size: 12px; color: #555;
+      background: white; border-top: 1px dashed var(--border);
+      display: none;
+    }
+    .guidance.show { display: block; }
+    .guidance.green { color: var(--green); background: var(--green-bg); font-weight: bold; }
+    .guidance.red   { color: var(--red);   background: #FDEDEC;        font-weight: bold; }
+
+    /* ── Buttons ── */
+    .action-row { display: flex; gap: 10px; margin: 16px 0; flex-wrap: wrap; }
+    .btn { padding: 11px 22px; font-size: 14px; font-weight: bold; border: none;
+           border-radius: 6px; cursor: pointer; font-family: inherit; }
+    .btn-log   { background: var(--green); color: white; }
+    .btn-clear { background: var(--slate); color: white; }
+    .btn-csv   { background: white; color: var(--slate); border: 2px solid var(--border); padding: 8px 16px; font-size: 13px; }
+    .btn:hover { opacity: .88; }
+
+    /* ── Call log table ── */
+    .log-section { margin-top: 28px; }
+    .log-top {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--slate); color: white;
+      padding: 10px 16px; border-radius: 8px 8px 0 0;
+    }
+    .log-top h2 { font-size: 14px; letter-spacing: .4px; }
+    .log-wrap { overflow-x: auto; border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { background: var(--steel); color: white; padding: 8px 10px; text-align: left; white-space: nowrap; }
+    td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--slate); vertical-align: top; }
+    tr:nth-child(even) td { background: var(--gray); }
+    tr:last-child td { border-bottom: none; }
+    td { word-break: break-word; white-space: normal; }
+    /* Cap wide columns so they wrap instead of stretching */
+    #log-table th:nth-child(8),
+    #log-table td:nth-child(8)  { max-width: 200px; } /* Grounds */
+    #log-table th:nth-child(11),
+    #log-table td:nth-child(11) { max-width: 180px; } /* Notes */
+    .cell-elig  { font-weight: bold; }
+    .cell-green { color: var(--green); background: var(--green-bg) !important; }
+    .cell-amber { color: var(--amber); background: var(--amber-bg) !important; }
+    .empty-log  { padding: 20px; text-align: center; color: #999; font-style: italic; }
+
+    /* ── Airtable setup panel ── */
+    #at-banner {
+      background: #FEF5E7; border: 1px solid #F0B429;
+      border-radius: 8px; margin: 14px 0; padding: 14px 18px;
+    }
+    #at-banner h3 { font-size: 13px; color: var(--amber); margin-bottom: 8px; }
+    #at-banner p  { font-size: 12px; color: #555; margin-bottom: 10px; line-height: 1.5; }
+    .at-fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+    .at-fields label { font-size: 11px; font-weight: bold; color: var(--slate); display: block; margin-bottom: 3px; }
+    .at-fields input { padding: 7px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: 5px; width: 260px; font-family: monospace; }
+    .btn-connect { background: var(--amber); color: white; border: none; padding: 8px 18px; font-size: 13px; font-weight: bold; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+    #at-status-bar {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; padding: 7px 14px;
+      border-radius: 6px; margin: 0 0 4px;
+    }
+    #at-status-bar.connected    { background: var(--green-bg); color: var(--green); }
+    #at-status-bar.disconnected { display: none; }
+
+    /* ── Responsive ── */
+    @media (max-width: 580px) {
+      .q-row { grid-template-columns: 1fr; }
+      .q-label { border-right: none; border-bottom: 1px solid var(--border); }
+      .q-input { background: var(--yellow); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Sticky result banner -->
+<div id="result-wrap">
+  <div id="result-banner">
+    ← Fill in the form below to see the eligibility result here &nbsp;|&nbsp; Complete el formulario para ver el resultado
+  </div>
+  <div id="grounds-bar">Grounds triggered will appear here as you answer &nbsp;|&nbsp; Los fundamentos aparecerán aquí al responder</div>
+</div>
+
+<div class="page-title">HABEAS CORPUS ELIGIBILITY SCREENER &nbsp;|&nbsp; ELEGIBILIDAD PARA HABEAS CORPUS</div>
+
+<div class="container">
+
+  <!-- ══ AIRTABLE SETUP ══════════════════════════════════════════════ -->
+  <div id="at-status-bar" class="disconnected">✓ Shared log connected to Airtable &nbsp;·&nbsp; <a href="#" onclick="document.getElementById('at-banner').style.display=''; return false;" style="color:var(--green)">change settings</a></div>
+  <div id="at-banner">
+    <h3>⚙ Connect shared call log → Airtable</h3>
+    <p>Once connected, every "Log This Call" saves to a shared Airtable table your whole team can see.<br>
+       <strong>Steps:</strong> 1) In Airtable, create a base called <em>Habeas Call Log</em> with a table called <em>Call Log</em> &nbsp;·&nbsp;
+       2) Go to <a href="https://airtable.com/create/tokens" target="_blank">airtable.com/create/tokens</a>, create a token with <em>data.records:write</em> scope for that base &nbsp;·&nbsp;
+       3) Paste both below.</p>
+    <div class="at-fields">
+      <div><label>Personal Access Token</label><input id="at-token" type="password" placeholder="patXXXXXXXXXXXXXX"></div>
+      <div><label>Base ID (from the base URL)</label><input id="at-base-id" type="text" placeholder="appXXXXXXXXXXXXXX"></div>
+      <button class="btn-connect" onclick="saveAirtableConfig()">Connect & Set Up</button>
+    </div>
+    <div id="at-setup-msg" style="margin-top:8px;font-size:12px;color:#555"></div>
+  </div>
+
+  <form id="screener" autocomplete="off">
+
+    <!-- ══ CALLER INFO ══════════════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-hdr">Caller Info &nbsp;|&nbsp; Información del caso</div>
+      <div class="q-row">
+        <div class="q-label"><div class="q-en">Detainee name</div><div class="q-es">Nombre del detenido/a</div></div>
+        <div class="q-input"><input type="text" id="name" placeholder="Full name"></div>
+      </div>
+      <div class="q-row">
+        <div class="q-label"><div class="q-en">A-Number</div><div class="q-es">Número A</div></div>
+        <div class="q-input"><input type="text" id="anumber" placeholder="A 000-000-000"></div>
+      </div>
+      <div class="q-row">
+        <div class="q-label"><div class="q-en">Facility &amp; state</div><div class="q-es">Centro de detención y estado</div></div>
+        <div class="q-input"><input type="text" id="facility" placeholder="e.g. Karnes County, TX"></div>
+      </div>
+      <div class="q-row">
+        <div class="q-label"><div class="q-en">Call taker</div><div class="q-es">Voluntario/a</div></div>
+        <div class="q-input"><input type="text" id="calltaker" placeholder="Your name"></div>
+      </div>
+      <div class="q-row">
+        <div class="q-label"><div class="q-en">Date of entry into the US</div><div class="q-es">Fecha de entrada a los EE.UU.</div></div>
+        <div class="q-input"><input type="date" id="dateEntry"></div>
+      </div>
+    </div>
+
+    <!-- ══ DETENTION ════════════════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-hdr">Detention &nbsp;|&nbsp; Detención</div>
+
+      <!-- Date detained -->
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q1 — Date ICE detained this person</div>
+          <div class="q-es">Fecha en que ICE detuvo a esta persona</div>
+        </div>
+        <div class="q-input">
+          <input type="date" id="dateDet" onchange="calc()">
+          <div class="auto-val" id="monthsDetVal"></div>
+        </div>
+      </div>
+
+      <!-- Final order -->
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q2 — Has a final order of removal been issued?</div>
+          <div class="q-es">¿Se emitió una orden final de deportación?</div>
+        </div>
+        <div class="q-input">
+          <select id="finalOrder" onchange="showHide(); calc()">
+            <option value="">— select —</option>
+            <option>Yes / Sí</option>
+            <option>No</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-finalOrder"></div>
+      </div>
+
+      <!-- Final order date (conditional) -->
+      <div id="sec-finalDate" class="q-row" style="display:none">
+        <div class="q-label">
+          <div class="q-en">Q3 — Date of final order</div>
+          <div class="q-es">Fecha de la orden final</div>
+        </div>
+        <div class="q-input">
+          <input type="date" id="finalDate" onchange="calc()">
+          <div class="auto-val" id="monthsFOVal"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ DETENTION AUTHORITY ══════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-hdr">Detention Authority &nbsp;|&nbsp; Autoridad de Detención</div>
+      <div class="section-note">
+        Listen for: criminal conviction &nbsp;/&nbsp; "arrived without papers" &nbsp;/&nbsp; already ordered deported<br>
+        Escuche: condena criminal &nbsp;/&nbsp; "entró sin inspección" &nbsp;/&nbsp; ya ordenado deportado
+      </div>
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q4 — Why does ICE say they're being held?</div>
+          <div class="q-es">¿Por qué dice ICE que están detenidos?</div>
+        </div>
+        <div class="q-input">
+          <select id="auth" onchange="showHide(); calc()">
+            <option value="">— select —</option>
+            <option>No criminal reason — bond possible (§1226a)</option>
+            <option>Criminal conviction cited (§1226c)</option>
+            <option>Arrived without papers (§1225b)</option>
+            <option>Already ordered deported (§1231)</option>
+            <option>Don't know / No sé</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-auth"></div>
+      </div>
+
+      <!-- Conviction check (§1226c only) -->
+      <div id="sec-convQual" style="display:none">
+        <div class="section-note" style="background:#FEF9E7; border-top:1px solid var(--border)">
+          ICE says they're held because of a criminal conviction. &nbsp;Qualifying offenses: aggravated felony, drug trafficking, firearms, crimes of moral turpitude, crimes of violence.<br>
+          ICE dice que están detenidos por una condena criminal. &nbsp;Condenas que califican: delito agravado, tráfico de drogas, armas, crímenes de torpeza moral, crímenes de violencia.
+        </div>
+        <div class="q-row">
+          <div class="q-label">
+            <div class="q-en">Q5 — Does the conviction actually qualify for mandatory detention?</div>
+            <div class="q-es">¿La condena califica para la detención obligatoria?</div>
+          </div>
+          <div class="q-input">
+            <select id="convQual" onchange="calc()">
+              <option value="">— select —</option>
+              <option>Yes — clearly qualifies</option>
+              <option>No — unlikely to qualify</option>
+              <option>Unknown / Desconocido</option>
+            </select>
+          </div>
+          <div class="guidance" id="g-convQual"></div>
+        </div>
+      </div>
+
+      <!-- Interior vs border (§1225b only) -->
+      <div id="sec-interior" style="display:none">
+        <div class="section-note" style="background:#E8F8F5; border-top:1px solid var(--border)">
+          ICE says the person "arrived without inspection." If they were arrested INSIDE the US (not at a border), ICE may be misapplying the law — they may be entitled to a bond hearing NOW. <em>(Yajure Hurtado, BIA 2025)</em><br>
+          Si fueron arrestados DENTRO de EE.UU. (no en la frontera), ICE puede estar aplicando la ley incorrectamente — y pueden tener derecho a una audiencia de fianza AHORA.
+        </div>
+        <div class="q-row">
+          <div class="q-label">
+            <div class="q-en">Q5 — Where was the person arrested?</div>
+            <div class="q-es">¿Dónde fue arrestada la persona?</div>
+          </div>
+          <div class="q-input">
+            <select id="interior" onchange="calc()">
+              <option value="">— select —</option>
+              <option>Yes / Sí — inside the US (home, work, traffic stop)</option>
+              <option>No — at a border crossing or port of entry</option>
+              <option>Unknown / Desconocido</option>
+            </select>
+          </div>
+          <div class="guidance" id="g-interior"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ BOND HEARING ══════════════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-hdr">Bond Hearing &nbsp;|&nbsp; Audiencia de Fianza</div>
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q6 — Has the person ever had a bond hearing?</div>
+          <div class="q-es">¿Ha tenido alguna vez una audiencia de fianza?</div>
+        </div>
+        <div class="q-input">
+          <select id="bondHeld" onchange="showHide(); calc()">
+            <option value="">— select —</option>
+            <option>Yes / Sí</option>
+            <option>No</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-bondHeld"></div>
+      </div>
+
+      <!-- Bond outcome (conditional) -->
+      <div id="sec-bondOut" class="q-row" style="display:none">
+        <div class="q-label">
+          <div class="q-en">Q7 — What was the outcome?</div>
+          <div class="q-es">¿Cuál fue el resultado?</div>
+        </div>
+        <div class="q-input">
+          <select id="bondOut" onchange="calc()">
+            <option value="">— select —</option>
+            <option>Granted / Concedida — released on bond</option>
+            <option>Denied / Negada</option>
+            <option>Too high / Muy alta — cannot afford to pay</option>
+            <option>Not yet scheduled / Aún no programada</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-bondOut"></div>
+      </div>
+    </div>
+
+    <!-- ══ QUICK FLAGS ═══════════════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-hdr">Quick Flags — Yes / No / Unknown &nbsp;|&nbsp; Indicadores rápidos — Sí / No / Desconocido</div>
+
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q8 — Country refusing removal, or person stateless?</div>
+          <div class="q-es">¿El país rechaza la deportación, o es apátrida?</div>
+        </div>
+        <div class="q-input">
+          <select id="country" onchange="calc()">
+            <option value="">— select —</option>
+            <option>Yes / Sí</option>
+            <option>No</option>
+            <option>Unknown / Desconocido</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-country"></div>
+      </div>
+
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q9 — Due process problems? (no attorney, bad interpreter, mental health not addressed)</div>
+          <div class="q-es">¿Problemas de debido proceso? (sin abogado, mal intérprete, salud mental ignorada)</div>
+        </div>
+        <div class="q-input">
+          <select id="dueProcess" onchange="calc()">
+            <option value="">— select —</option>
+            <option>Yes / Sí</option>
+            <option>No</option>
+            <option>Unknown / Desconocido</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-dueProcess"></div>
+      </div>
+
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q10 — ICE error, mistaken identity, or held past a court deadline?</div>
+          <div class="q-es">¿Error de ICE, identidad equivocada, o detenido más allá del plazo judicial?</div>
+        </div>
+        <div class="q-input">
+          <select id="adminErr" onchange="calc()">
+            <option value="">— select —</option>
+            <option>Yes / Sí</option>
+            <option>No</option>
+            <option>Unknown / Desconocido</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-adminErr"></div>
+      </div>
+    </div>
+
+    <!-- ══ LEGAL REPRESENTATION ════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-hdr">Legal Representation &nbsp;|&nbsp; Representación Legal</div>
+      <div class="q-row">
+        <div class="q-label">
+          <div class="q-en">Q11 — Do they have a lawyer?</div>
+          <div class="q-es">¿Tienen un abogado/a?</div>
+        </div>
+        <div class="q-input">
+          <select id="hasLawyer" onchange="showHide(); calc()">
+            <option value="">— select —</option>
+            <option>Yes / Sí</option>
+            <option>No</option>
+            <option>Getting one / Buscando uno</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-hasLawyer"></div>
+      </div>
+      <div id="sec-habeaFiled" class="q-row" style="display:none">
+        <div class="q-label">
+          <div class="q-en">Q12 — Has the lawyer filed for habeas?</div>
+          <div class="q-es">¿Ha presentado el abogado/a el habeas corpus?</div>
+        </div>
+        <div class="q-input">
+          <select id="habeasFiled" onchange="calc()">
+            <option value="">— select —</option>
+            <option>Yes — already filed</option>
+            <option>No — not yet</option>
+            <option>Planning to file</option>
+          </select>
+        </div>
+        <div class="guidance" id="g-habeasFiled"></div>
+      </div>
+    </div>
+
+    <!-- ══ NOTES ════════════════════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-hdr">Notes &nbsp;|&nbsp; Notas</div>
+      <div style="padding:12px 14px; background:var(--yellow)">
+        <textarea id="notes" rows="3" style="width:100%;padding:8px;font-family:inherit;font-size:13px;border:1px solid var(--border);border-radius:5px;resize:vertical" placeholder="Attorney referred, follow-up needed, anything else | Abogado referido, seguimiento, cualquier otra cosa"></textarea>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="action-row">
+      <button type="button" class="btn btn-log" onclick="logCall()">✔ Log This Call</button>
+      <button type="button" class="btn btn-clear" onclick="clearForm()">↺ New Call</button>
+    </div>
+
+  </form>
+
+  <!-- ══ CALL LOG ══════════════════════════════════════════════════════ -->
+  <div class="log-section">
+    <div class="log-top">
+      <h2>📋 Call Log</h2>
+      <button class="btn btn-csv" onclick="exportCSV()">Export CSV</button>
+    </div>
+    <div class="log-wrap">
+      <div id="log-empty" class="empty-log">No calls logged yet. Fill in the form and click "Log This Call."</div>
+      <table id="log-table" style="display:none">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Date</th>
+            <th>Name</th>
+            <th>A-Number</th>
+            <th>Facility</th>
+            <th>US Entry</th>
+            <th>Months Det.</th>
+            <th>Eligible?</th>
+            <th>Grounds</th>
+            <th>Lawyer?</th>
+            <th>Habeas Filed?</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function v(id) { return (document.getElementById(id)||{}).value || ''; }
+function monthsAgo(dateStr) {
+  if (!dateStr) return null;
+  const diff = (new Date() - new Date(dateStr)) / (1000 * 60 * 60 * 24 * 30.44);
+  return Math.round(diff * 10) / 10;
+}
+function setGuide(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'guidance' + (text ? ' show' : '') + (cls ? ' ' + cls : '');
+  el.textContent = text;
+}
+
+// ── Conditional show/hide ─────────────────────────────────────────────────────
+function showHide() {
+  const finalOrder = v('finalOrder');
+  const auth       = v('auth');
+  const bondHeld   = v('bondHeld');
+
+  document.getElementById('sec-finalDate').style.display =
+    finalOrder === 'Yes / Sí' ? '' : 'none';
+
+  document.getElementById('sec-convQual').style.display =
+    auth === 'Criminal conviction cited (§1226c)' ? '' : 'none';
+
+  document.getElementById('sec-interior').style.display =
+    auth === 'Arrived without papers (§1225b)' ? '' : 'none';
+
+  document.getElementById('sec-bondOut').style.display =
+    bondHeld === 'Yes / Sí' ? '' : 'none';
+
+  const hasLawyer = v('hasLawyer');
+  document.getElementById('sec-habeaFiled').style.display =
+    hasLawyer === 'Yes / Sí' ? '' : 'none';
+}
+
+// ── Main calculation ──────────────────────────────────────────────────────────
+function calc() {
+  showHide();
+
+  const dateDet   = v('dateDet');
+  const finalDate = v('finalDate');
+  const finalOrd  = v('finalOrder');
+  const auth      = v('auth');
+  const interior  = v('interior');
+  const convQual  = v('convQual');
+  const bondHeld  = v('bondHeld');
+  const bondOut   = v('bondOut');
+  const country   = v('country');
+  const dueProc   = v('dueProcess');
+  const adminErr  = v('adminErr');
+
+  // Auto-calculated months
+  const months   = monthsAgo(dateDet);
+  const monthsFO = (finalOrd === 'Yes / Sí') ? monthsAgo(finalDate) : null;
+
+  const mEl   = document.getElementById('monthsDetVal');
+  const mFOEl = document.getElementById('monthsFOVal');
+
+  if (months !== null) {
+    mEl.textContent = months + ' months detained';
+    mEl.className   = 'auto-val' + (months >= 6 ? ' warn' : '');
+  } else {
+    mEl.textContent = '';
+  }
+
+  if (monthsFO !== null) {
+    mFOEl.textContent = monthsFO + ' months since final order';
+    mFOEl.className   = 'auto-val' + (monthsFO >= 6 ? ' warn' : '');
+  } else {
+    mFOEl.textContent = '';
+  }
+
+  // ── Ground formulas ─────────────────────────────────────────────────────
+  const G_YH = auth === 'Arrived without papers (§1225b)' &&
+               interior === 'Yes / Sí — inside the US (home, work, traffic stop)';
+
+  const G1   = months >= 6 && finalOrd === 'No' &&
+               (bondHeld === 'No' ||
+                bondOut  === 'Denied / Negada' ||
+                bondOut  === 'Too high / Muy alta — cannot afford to pay');
+
+  const G2   = monthsFO !== null && monthsFO >= 6;
+
+  const G3   = auth === 'Criminal conviction cited (§1226c)' &&
+               (convQual === 'No — unlikely to qualify' ||
+                convQual === 'Unknown / Desconocido');
+
+  const G4   = auth === 'Arrived without papers (§1225b)' &&
+               interior === 'No — at a border crossing or port of entry' &&
+               months >= 6;
+
+  const G5   = bondOut === 'Denied / Negada' ||
+               bondOut === 'Too high / Muy alta — cannot afford to pay';
+
+  const G7   = country    === 'Yes / Sí';
+  const G8   = dueProc    === 'Yes / Sí';
+  const G9   = adminErr   === 'Yes / Sí';
+
+  const eligible = G_YH || G1 || G2 || G3 || G4 || G5 || G7 || G8 || G9;
+
+  // ── Grounds list ────────────────────────────────────────────────────────
+  const grounds = [];
+  if (G_YH) grounds.push('✔ YAJURE HURTADO — §1225(b)(2) wrongly applied to interior arrest. Bond hearing owed NOW.');
+  if (G1)   grounds.push('✔ Prolonged pre-order detention (6+ months, no bond hearing)');
+  if (G2)   grounds.push('✔ Zadvydas — 6+ months post-order, removal may be impossible');
+  if (G3)   grounds.push('✔ Wrongful mandatory detention — §1226(c) misclassification');
+  if (G4)   grounds.push('✔ §1225(b) border case detained 6+ months');
+  if (G5)   grounds.push('✔ Bond denied or set unaffordably high');
+  if (G7)   grounds.push('✔ Country refuses removal / stateless');
+  if (G8)   grounds.push('✔ Due process violations');
+  if (G9)   grounds.push('✔ ICE administrative error / held past deadline');
+
+  // ── Update banner ────────────────────────────────────────────────────────
+  const banner    = document.getElementById('result-banner');
+  const groundBar = document.getElementById('grounds-bar');
+  const hasInput  = dateDet || auth || bondHeld;
+
+  if (!hasInput) {
+    banner.className = '';
+    banner.textContent = '← Fill in the form below to see the eligibility result  |  Complete el formulario para ver el resultado';
+    groundBar.textContent = 'Grounds triggered will appear here as you answer  |  Los fundamentos aparecerán aquí al responder';
+  } else if (eligible) {
+    banner.className = 'eligible';
+    banner.textContent = '✔  LIKELY HABEAS ELIGIBLE — Refer to attorney immediately  |  POSIBLEMENTE ELEGIBLE — Referir a abogado ahora';
+    groundBar.innerHTML = grounds.join(' &nbsp;&nbsp; ');
+  } else {
+    banner.className = 'not-yet';
+    banner.textContent = 'No clear grounds identified yet — keep answering  |  Sin fundamentos claros todavía — continúe respondiendo';
+    groundBar.textContent = grounds.length ? grounds.join('  ') : 'No grounds triggered yet.';
+  }
+
+  // ── Per-question guidance ────────────────────────────────────────────────
+  const fo = v('finalOrder');
+  setGuide('g-finalOrder',
+    fo === 'Yes / Sí' ? '→ Enter the order date (Q3) below.' :
+    fo === 'No'       ? '→ Pre-order rules apply. Bond hearing is key.' : '');
+
+  const a = v('auth');
+  setGuide('g-auth',
+    a === 'No criminal reason — bond possible (§1226a)'  ? '→ Can request a bond hearing right away.' :
+    a === 'Criminal conviction cited (§1226c)'           ? '→ Answer Q5 — conviction may not actually qualify.' :
+    a === 'Arrived without papers (§1225b)'              ? '→ Answer Q5 — possible Yajure Hurtado case. Bond hearing may be owed NOW.' :
+    a === 'Already ordered deported (§1231)'             ? '→ Zadvydas applies if 6+ months post-order and removal not happening.' : '');
+
+  const cq = v('convQual');
+  setGuide('g-convQual',
+    cq === 'Yes — clearly qualifies'       ? 'Mandatory detention appears valid. Check other grounds.' :
+    (cq === 'No — unlikely to qualify' || cq === 'Unknown / Desconocido')
+      ? '✔  GROUND 3 — Wrongful mandatory detention. Conviction may not qualify. Refer to attorney.' : '',
+    (cq === 'No — unlikely to qualify' || cq === 'Unknown / Desconocido') ? 'green' : '');
+
+  const int = v('interior');
+  setGuide('g-interior',
+    int === 'Yes / Sí — inside the US (home, work, traffic stop)'
+      ? '✔  YAJURE HURTADO — Bond hearing owed immediately. File habeas now.' :
+    int === 'No — at a border crossing or port of entry'
+      ? '→ §1225(b) may legitimately apply here. Check if 6+ months detained (Q1).' : '',
+    int === 'Yes / Sí — inside the US (home, work, traffic stop)' ? 'green' : '');
+
+  const bh = v('bondHeld');
+  setGuide('g-bondHeld',
+    bh === 'No'       ? '→ No bond hearing held. If 6+ months and no final order, this is a strong habeas ground.' :
+    bh === 'Yes / Sí' ? '→ Answer Q7 below.' : '');
+
+  const bo = v('bondOut');
+  setGuide('g-bondOut',
+    (bo === 'Denied / Negada' || bo === 'Too high / Muy alta — cannot afford to pay')
+      ? '✔  GROUND 5 — Bond denied or unaffordable. Strong habeas ground.' :
+    bo === 'Granted / Concedida — released on bond'
+      ? 'Bond granted. Is the person still detained? If yes, note why.' : '',
+    (bo === 'Denied / Negada' || bo === 'Too high / Muy alta — cannot afford to pay') ? 'green' : '');
+
+  setGuide('g-country',
+    country === 'Yes / Sí' ? '✔  GROUND 7 — Removal impossible. Strong habeas ground.' : '', country === 'Yes / Sí' ? 'green' : '');
+
+  setGuide('g-dueProcess',
+    dueProc === 'Yes / Sí' ? '✔  GROUND 8 — Due process violation. Document specifically.' : '', dueProc === 'Yes / Sí' ? 'green' : '');
+
+  setGuide('g-adminErr',
+    adminErr === 'Yes / Sí' ? '✔  GROUND 9 — File immediately. May need emergency TRO.' : '', adminErr === 'Yes / Sí' ? 'red' : '');
+
+  const hasLawyer   = v('hasLawyer');
+  const habeasFiled = v('habeasFiled');
+  setGuide('g-hasLawyer',
+    hasLawyer === 'No'                  ? '→ No lawyer. If eligible, refer to an immigration attorney immediately.' :
+    hasLawyer === 'Getting one / Buscando uno' ? '→ In the process of finding one. Follow up on referral.' :
+    hasLawyer === 'Yes / Sí'            ? '→ Answer Q12 below.' : '');
+  setGuide('g-habeasFiled',
+    habeasFiled === 'Yes — already filed' ? '→ Filed. Ask for case number and court if available.' :
+    habeasFiled === 'No — not yet'        ? '→ Not yet filed. If eligible, flag for attorney follow-up.' :
+    habeasFiled === 'Planning to file'    ? '→ Attorney is planning to file. Note any deadlines.' : '');
+}
+
+// ── Log a call ────────────────────────────────────────────────────────────────
+async function logCall() {
+  const months   = monthsAgo(v('dateDet'));
+  const monthsFO = v('finalOrder') === 'Yes / Sí' ? monthsAgo(v('finalDate')) : null;
+
+  const grounds = [];
+  const auth = v('auth'), interior = v('interior'), convQual = v('convQual');
+  const bondHeld = v('bondHeld'), bondOut = v('bondOut');
+  const country = v('country'), dueProc = v('dueProcess'), adminErr = v('adminErr');
+
+  const G_YH = auth === 'Arrived without papers (§1225b)' && interior === 'Yes / Sí — inside the US (home, work, traffic stop)';
+  const G1   = months >= 6 && v('finalOrder') === 'No' && (bondHeld === 'No' || bondOut === 'Denied / Negada' || bondOut === 'Too high / Muy alta — cannot afford to pay');
+  const G2   = monthsFO !== null && monthsFO >= 6;
+  const G3   = auth === 'Criminal conviction cited (§1226c)' && (convQual === 'No — unlikely to qualify' || convQual === 'Unknown / Desconocido');
+  const G4   = auth === 'Arrived without papers (§1225b)' && interior === 'No — at a border crossing or port of entry' && months >= 6;
+  const G5   = bondOut === 'Denied / Negada' || bondOut === 'Too high / Muy alta — cannot afford to pay';
+  const G7   = country === 'Yes / Sí';
+  const G8   = dueProc === 'Yes / Sí';
+  const G9   = adminErr === 'Yes / Sí';
+  const eligible = G_YH || G1 || G2 || G3 || G4 || G5 || G7 || G8 || G9;
+
+  if (G_YH) grounds.push('YAJURE HURTADO');
+  if (G1)   grounds.push('Prolonged pre-order detention');
+  if (G2)   grounds.push('Zadvydas 6+ months post-order');
+  if (G3)   grounds.push('§1226(c) misclassification');
+  if (G4)   grounds.push('§1225(b) border 6+ months');
+  if (G5)   grounds.push('Bond denied/unaffordable');
+  if (G7)   grounds.push('Country refuses/stateless');
+  if (G8)   grounds.push('Due process');
+  if (G9)   grounds.push('ICE admin error');
+
+  const entry = {
+    date:         new Date().toLocaleDateString('en-US'),
+    name:         v('name')      || '—',
+    anumber:      v('anumber')   || '—',
+    facility:     v('facility')  || '—',
+    dateEntry:    v('dateEntry') || '—',
+    months:       months !== null ? months + ' mo' : '—',
+    eligible:     eligible ? 'Likely Eligible' : 'Review Needed',
+    grounds:      grounds.join('; ') || 'None triggered',
+    hasLawyer:    v('hasLawyer')    || '—',
+    habeasFiled:  v('habeasFiled')  || '—',
+    notes:        v('notes') || '',
+  };
+
+  // Save locally
+  const log = JSON.parse(localStorage.getItem('habeasLog') || '[]');
+  log.unshift(entry);
+  localStorage.setItem('habeasLog', JSON.stringify(log));
+  renderLog();
+
+  // Save to shared Airtable log
+  if (AT_TOKEN && AT_BASE_ID) {
+    const btn = document.querySelector('.btn-log');
+    btn.textContent = 'Saving…'; btn.disabled = true;
+    const ok = await postToAirtable(entry);
+    btn.textContent = '✔ Log This Call'; btn.disabled = false;
+    if (ok) {
+      alert('✔  Saved to shared log! Click "New Call" for the next caller.');
+    } else {
+      alert('⚠  Saved locally, but could not reach Airtable.\nCheck your token and Base ID in the setup panel.');
+    }
+  } else {
+    alert('✔  Call logged! Click "New Call" to screen the next caller.');
+  }
+}
+
+// ── Airtable config ───────────────────────────────────────────────────────────
+let AT_TOKEN   = localStorage.getItem('at_token')   || '';
+let AT_BASE_ID = localStorage.getItem('at_base_id') || '';
+const AT_TABLE = 'Habeas Call Log';
+
+async function saveAirtableConfig() {
+  AT_TOKEN   = document.getElementById('at-token').value.trim();
+  AT_BASE_ID = document.getElementById('at-base-id').value.trim();
+  if (!AT_TOKEN || !AT_BASE_ID) {
+    document.getElementById('at-setup-msg').textContent = 'Please fill in both fields.';
+    return;
+  }
+  localStorage.setItem('at_token',   AT_TOKEN);
+  localStorage.setItem('at_base_id', AT_BASE_ID);
+  await setupAirtableTable();
+  updateAirtableStatus();
+}
+
+function updateAirtableStatus() {
+  const ok  = AT_TOKEN && AT_BASE_ID;
+  const bar = document.getElementById('at-status-bar');
+  bar.className = ok ? 'connected' : 'disconnected';
+  document.getElementById('at-banner').style.display = ok ? 'none' : '';
+  if (AT_TOKEN) document.getElementById('at-token').value   = AT_TOKEN;
+  if (AT_BASE_ID) document.getElementById('at-base-id').value = AT_BASE_ID;
+}
+
+async function setupAirtableTable() {
+  const msg = document.getElementById('at-setup-msg');
+  msg.textContent = 'Connecting…';
+  try {
+    // Find the "Habeas Call Log" table and get its ID + existing fields
+    const r = await fetch(`https://api.airtable.com/v0/meta/bases/${AT_BASE_ID}/tables`, {
+      headers: { 'Authorization': `Bearer ${AT_TOKEN}` }
+    });
+    if (!r.ok) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = 'Could not connect. Double-check your token and Base ID.';
+      return;
+    }
+    const data = await r.json();
+    const table = data.tables.find(t => t.name === AT_TABLE);
+    if (!table) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = `Could not find a tab called "${AT_TABLE}" in this base. Make sure the tab is named exactly "Habeas Call Log".`;
+      return;
+    }
+
+    // Add any missing columns (skip ones that already exist)
+    const existing = table.fields.map(f => f.name);
+    const needed = [
+      { name: 'Date',            type: 'singleLineText' },
+      { name: 'A-Number',        type: 'singleLineText' },
+      { name: 'Facility',        type: 'singleLineText' },
+      { name: 'US Entry Date',   type: 'singleLineText' },
+      { name: 'Months Detained', type: 'singleLineText' },
+      { name: 'Eligible',        type: 'singleLineText' },
+      { name: 'Grounds',         type: 'multilineText'  },
+      { name: 'Lawyer',          type: 'singleLineText' },
+      { name: 'Habeas Filed',    type: 'singleLineText' },
+    ];
+    let added = 0;
+    for (const field of needed) {
+      if (!existing.includes(field.name)) {
+        await fetch(`https://api.airtable.com/v0/meta/bases/${AT_BASE_ID}/tables/${table.id}/fields`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${AT_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(field)
+        });
+        added++;
+      }
+    }
+    msg.style.color = 'var(--green)';
+    msg.textContent = added > 0
+      ? `✓ Added ${added} columns to Habeas Call Log. You're all set!`
+      : '✓ Connected to Habeas Call Log. Ready!';
+    updateAirtableStatus();
+  } catch(e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Connection failed. Check your token and Base ID.';
+  }
+}
+
+async function postToAirtable(entry) {
+  if (!AT_TOKEN || !AT_BASE_ID) return null;
+  try {
+    const r = await fetch(
+      `https://api.airtable.com/v0/${AT_BASE_ID}/${encodeURIComponent(AT_TABLE)}`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${AT_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: {
+          'Date':           entry.date,
+          'Name':           entry.name,
+          'A-Number':       entry.anumber,
+          'Facility':       entry.facility,
+          'US Entry Date':  entry.dateEntry    || '',
+          'Months Detained':entry.months,
+          'Eligible':       entry.eligible,
+          'Grounds':        entry.grounds,
+          'Lawyer':         entry.hasLawyer    || '',
+          'Habeas Filed':   entry.habeasFiled  || '',
+          'Notes':          entry.notes        || '',
+        }})
+      }
+    );
+    return r.ok;
+  } catch(e) { return false; }
+}
+
+// ── Delete a call ─────────────────────────────────────────────────────────────
+function deleteCall(index) {
+  if (!confirm('Delete this call from the log?')) return;
+  const log = JSON.parse(localStorage.getItem('habeasLog') || '[]');
+  log.splice(index, 1);
+  localStorage.setItem('habeasLog', JSON.stringify(log));
+  renderLog();
+}
+
+// ── Render call log table ─────────────────────────────────────────────────────
+function renderLog() {
+  const log = JSON.parse(localStorage.getItem('habeasLog') || '[]');
+  const empty = document.getElementById('log-empty');
+  const table = document.getElementById('log-table');
+  const tbody = document.getElementById('log-body');
+
+  if (!log.length) {
+    empty.style.display = ''; table.style.display = 'none'; return;
+  }
+  empty.style.display = 'none'; table.style.display = '';
+  tbody.innerHTML = log.map((e, i) => `
+    <tr>
+      <td style="text-align:center;padding:4px 8px">
+        <button onclick="deleteCall(${i})" title="Delete this entry"
+          style="background:none;border:1px solid #ccc;border-radius:4px;cursor:pointer;color:#922B21;font-size:13px;padding:2px 7px"
+        >✕</button>
+      </td>
+      <td>${e.date}</td>
+      <td>${e.name}</td>
+      <td>${e.anumber}</td>
+      <td>${e.facility}</td>
+      <td>${e.dateEntry || '—'}</td>
+      <td style="text-align:center">${e.months}</td>
+      <td class="cell-elig ${e.eligible === 'Likely Eligible' ? 'cell-green' : 'cell-amber'}">${e.eligible}</td>
+      <td>${e.grounds}</td>
+      <td>${e.hasLawyer || '—'}</td>
+      <td>${e.habeasFiled || '—'}</td>
+      <td>${e.notes}</td>
+    </tr>`).join('');
+}
+
+// ── Clear form ────────────────────────────────────────────────────────────────
+function clearForm() {
+  document.getElementById('screener').reset();
+  showHide();
+  calc();
+  window.scrollTo(0, 0);
+}
+
+// ── Export CSV ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const log = JSON.parse(localStorage.getItem('habeasLog') || '[]');
+  if (!log.length) { alert('No calls logged yet.'); return; }
+  const headers = ['Date','Name','A-Number','Facility','US Entry Date','Months Det.','Eligible?','Grounds','Lawyer?','Habeas Filed?','Notes'];
+  const rows = log.map(e => [e.date, e.name, e.anumber, e.facility, e.dateEntry||'', e.months, e.eligible, e.grounds, e.hasLawyer||'', e.habeasFiled||'', e.notes]
+    .map(x => '"' + (x||'').replace(/"/g, '""') + '"').join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'habeas_call_log_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+updateAirtableStatus();
+renderLog();
+showHide();
+</script>
+</body>
+</html>
